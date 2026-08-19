@@ -97,6 +97,12 @@
     transition:border-color .15s, color .15s;
   }
   .print-btn:hover{border-color:var(--primary-2); color:var(--primary-2);}
+  .save-status{
+    font-size:11.5px; color:var(--ink-faint); font-weight:500; white-space:nowrap;
+    max-width:160px; overflow:hidden; text-overflow:ellipsis;
+  }
+  .save-status.ok{color:var(--teal);}
+  .save-status.err{color:var(--danger);}
 
   .nav-toggle{
     display:none; border:1px solid var(--border); background:var(--surface);
@@ -342,6 +348,7 @@
     .shell{padding-left:16px; padding-right:16px;}
     .topbar{padding:10px 14px;}
     .progress-pill__label{display:none;}
+    .save-status{display:none;}
     table, thead, tbody, th, td, tr{display:block;}
     thead{display:none;}
     tbody tr{
@@ -391,6 +398,10 @@
       <span class="progress-pill__label">Tiến độ chuẩn bị</span>
       <span class="progress-pill__num" id="ringNum">0%</span>
     </div>
+    <span class="save-status" id="saveStatus">Đang tải tiến độ…</span>
+    <button class="print-btn" type="button" id="exportBtn">Xuất backup</button>
+    <button class="print-btn" type="button" id="importBtn">Nhập backup</button>
+    <input type="file" id="importFile" accept="application/json,.json" hidden>
     <button class="print-btn" onclick="window.print()">In tài liệu</button>
   </div>
 </div>
@@ -538,7 +549,7 @@
       <div class="sec-head">
         <span class="sec-head__num">02</span>
         <h2>Việc cần làm theo từng phòng ban</h2>
-        <p>Có thể tick trực tiếp trong buổi họp để theo dõi tiến độ cam kết của từng phòng.</p>
+        <p>Tick trực tiếp trên link dùng chung. Mọi phòng ban mở cùng trang đều thấy một tiến độ; người lưu sau ghi đè người trước.</p>
       </div>
 
       <div class="dept-grid" id="deptGrid">
@@ -769,10 +780,80 @@
   }, { rootMargin: '-20% 0px -70% 0px' });
   sections.forEach(s => s && io.observe(s));
 
-  // Checklist progress (per card + overall ring)
+  // Shared checklist: one state for everyone on the Vercel link (last write wins)
+  const STATE_URL = 'https://api.restful-api.dev/objects/ff8081819ff5b11001a018a567464bf6';
+  const POLL_MS = 3000;
   const ringFg = document.getElementById('ringFg');
   const ringNum = document.getElementById('ringNum');
+  const saveStatus = document.getElementById('saveStatus');
   const CIRC = 2 * Math.PI * 8;
+  const allowedIds = new Set(allCheckboxEls().map(b => b.id));
+
+  let saving = false;
+  let pendingSave = false;
+  let lastCheckedKey = '';
+
+  function allCheckboxEls(){
+    return [...document.querySelectorAll('#deptGrid input[type=checkbox]')];
+  }
+
+  function snapshot(){
+    return {
+      v: 1,
+      updatedAt: new Date().toISOString(),
+      checked: allCheckboxEls().filter(b => b.checked).map(b => b.id)
+    };
+  }
+
+  function normalize(data){
+    const ids = Array.isArray(data && data.checked) ? data.checked : [];
+    return {
+      v: 1,
+      updatedAt: data && data.updatedAt ? data.updatedAt : null,
+      checked: ids.filter(id => allowedIds.has(id))
+    };
+  }
+
+  function checkedKey(ids){
+    return (ids || []).slice().sort().join(',');
+  }
+
+  function applyChecked(ids){
+    const set = new Set(Array.isArray(ids) ? ids : []);
+    allCheckboxEls().forEach(b => { b.checked = set.has(b.id); });
+    lastCheckedKey = checkedKey([...set]);
+  }
+
+  function formatSavedAt(iso){
+    try{
+      return new Date(iso).toLocaleString('vi-VN', { dateStyle:'short', timeStyle:'short' });
+    }catch{
+      return '';
+    }
+  }
+
+  function setStatus(text, kind){
+    saveStatus.textContent = text;
+    saveStatus.classList.toggle('ok', kind === 'ok');
+    saveStatus.classList.toggle('err', kind === 'err');
+  }
+
+  async function pullState(){
+    const res = await fetch(STATE_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if(!res.ok) throw new Error('load ' + res.status);
+    const json = await res.json();
+    return normalize(json.data || json);
+  }
+
+  async function pushState(data){
+    const res = await fetch(STATE_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'hoaan-checklist', data })
+    });
+    if(!res.ok) throw new Error('save ' + res.status);
+    return data;
+  }
 
   function updateAll(){
     let totalChecked = 0, totalBoxes = 0;
@@ -788,8 +869,86 @@
     ringFg.setAttribute('stroke-dashoffset', CIRC - (pct/100)*CIRC);
     ringNum.textContent = pct + '%';
   }
-  document.getElementById('deptGrid').addEventListener('change', updateAll);
+
+  async function loadShared(fromPoll){
+    if(saving) return;
+    const data = await pullState();
+    const key = checkedKey(data.checked);
+    if(fromPoll && key === lastCheckedKey) return;
+    applyChecked(data.checked);
+    updateAll();
+    const when = formatSavedAt(data.updatedAt);
+    setStatus(when ? 'Đã đồng bộ ' + when : 'Tiến độ dùng chung toàn công ty', 'ok');
+  }
+
+  async function saveShared(){
+    pendingSave = true;
+    if(saving) return;
+    saving = true;
+    setStatus('Đang lưu cho mọi người…', '');
+    try{
+      while(pendingSave){
+        pendingSave = false;
+        const data = snapshot();
+        lastCheckedKey = checkedKey(data.checked);
+        await pushState(data);
+        setStatus('Đã lưu chung ' + formatSavedAt(data.updatedAt), 'ok');
+      }
+    }catch(err){
+      setStatus('Không lưu được lên máy chủ chung', 'err');
+    }finally{
+      saving = false;
+    }
+  }
+
+  document.getElementById('deptGrid').addEventListener('change', () => {
+    updateAll();
+    saveShared();
+  });
+
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(snapshot(), null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'hoaan-erp-checklist.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  const importFile = document.getElementById('importFile');
+  document.getElementById('importBtn').addEventListener('click', () => importFile.click());
+  importFile.addEventListener('change', () => {
+    const file = importFile.files && importFile.files[0];
+    importFile.value = '';
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try{
+        const data = JSON.parse(reader.result);
+        if(!data || !Array.isArray(data.checked)) throw new Error('invalid');
+        applyChecked(data.checked);
+        updateAll();
+        saveShared();
+      }catch{
+        setStatus('File backup không hợp lệ', 'err');
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  loadShared(false).catch(() => {
+    setStatus('Không tải được tiến độ dùng chung', 'err');
+    updateAll();
+  });
   updateAll();
+
+  setInterval(() => {
+    if(document.hidden) return;
+    loadShared(true).catch(() => {});
+  }, POLL_MS);
+  document.addEventListener('visibilitychange', () => {
+    if(!document.hidden) loadShared(true).catch(() => {});
+  });
 </script>
 </body>
 </html>

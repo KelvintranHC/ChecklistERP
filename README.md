@@ -1,6 +1,6 @@
 # Checklist triển khai HoaAn ERP
 
-Trang checklist tĩnh (HTML) dùng để theo dõi các bước triển khai HoaAn ERP.
+Trang checklist dùng chung cho các phòng ban. Ai mở link Vercel cũng thấy cùng trạng thái tick; người lưu sau ghi đè người trước.
 
 ## Chạy local
 
