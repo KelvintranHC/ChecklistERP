@@ -1,7 +1,6 @@
-const OWNER = 'KelvintranHC';
-const REPO = 'ChecklistERP';
-const PATH = 'data/state.json';
-const BRANCH = 'checklist-data';
+const { put, get } = require('@vercel/blob');
+
+const BLOB_PATH = 'checklist-state.json';
 const ALLOWED = new Set([
   'k1','k2','k3','k4','k5',
   's1','s2','s3','s4',
@@ -11,7 +10,6 @@ const ALLOWED = new Set([
   'i1','i2','i3','i4',
   'g1','g2','g3'
 ]);
-
 const EMPTY = { v: 1, checked: [], updatedAt: null };
 
 function json(res, status, body) {
@@ -31,46 +29,25 @@ function normalize(data) {
   };
 }
 
-function ghHeaders(token) {
-  const headers = {
-    Accept: 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-    'User-Agent': 'hoaan-erp-checklist'
-  };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  return headers;
+async function readState() {
+  const blob = await get(BLOB_PATH, { access: 'private', useCache: false });
+  if (!blob) return EMPTY;
+  const text = await new Response(blob.stream).text();
+  if (!text) return EMPTY;
+  return normalize(JSON.parse(text));
 }
 
-async function readGithub(token) {
-  const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${PATH}?ref=${BRANCH}`;
-  const res = await fetch(url, { headers: ghHeaders(token) });
-  if (res.status === 404) return { state: EMPTY, sha: null };
-  if (!res.ok) throw new Error('github_read_' + res.status);
-  const file = await res.json();
-  const decoded = Buffer.from(file.content.replace(/\n/g, ''), 'base64').toString('utf8');
-  return { state: normalize(JSON.parse(decoded)), sha: file.sha };
-}
-
-async function writeGithub(token, state, sha) {
-  if (!token) throw new Error('missing_token');
-  const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${PATH}`;
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: { ...ghHeaders(token), 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message: 'chore: cập nhật tiến độ checklist dùng chung',
-      content: Buffer.from(JSON.stringify(state, null, 2) + '\n', 'utf8').toString('base64'),
-      sha: sha || undefined,
-      branch: BRANCH
-    })
+async function writeState(state) {
+  await put(BLOB_PATH, JSON.stringify(state), {
+    access: 'private',
+    allowOverwrite: true,
+    addRandomSuffix: false,
+    contentType: 'application/json',
+    cacheControlMaxAge: 0
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error('github_write_' + res.status + '_' + text.slice(0, 180));
-  }
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -78,12 +55,9 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
-  const token = process.env.CHECKLIST_GITHUB_TOKEN || process.env.GITHUB_TOKEN || '';
-
   try {
     if (req.method === 'GET') {
-      const { state } = await readGithub(token);
-      return json(res, 200, state);
+      return json(res, 200, await readState());
     }
 
     if (req.method === 'POST') {
@@ -92,8 +66,7 @@ export default async function handler(req, res) {
         checked: body.checked,
         updatedAt: new Date().toISOString()
       });
-      const current = await readGithub(token);
-      await writeGithub(token, next, current.sha);
+      await writeState(next);
       return json(res, 200, next);
     }
 
@@ -101,4 +74,4 @@ export default async function handler(req, res) {
   } catch (err) {
     return json(res, 500, { error: 'save_failed', detail: String(err && err.message ? err.message : err) });
   }
-}
+};
