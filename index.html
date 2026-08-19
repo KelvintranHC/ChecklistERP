@@ -780,9 +780,9 @@
   }, { rootMargin: '-20% 0px -70% 0px' });
   sections.forEach(s => s && io.observe(s));
 
-  // Shared checklist: one state for everyone on the Vercel link (last write wins)
-  const STATE_URL = 'https://api.restful-api.dev/objects/ff8081819ff5b11001a018a567464bf6';
-  const POLL_MS = 3000;
+  // Shared checklist via same-origin /api/state (Vercel + GitHub). Last write wins.
+  const STATE_URL = '/api/state';
+  const POLL_MS = 4000;
   const ringFg = document.getElementById('ringFg');
   const ringNum = document.getElementById('ringNum');
   const saveStatus = document.getElementById('saveStatus');
@@ -842,17 +842,20 @@
     const res = await fetch(STATE_URL + '?t=' + Date.now(), { cache: 'no-store' });
     if(!res.ok) throw new Error('load ' + res.status);
     const json = await res.json();
-    return normalize(json.data || json);
+    if(json && json.error) throw new Error(json.error);
+    return normalize(json);
   }
 
   async function pushState(data){
     const res = await fetch(STATE_URL, {
-      method: 'PUT',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'hoaan-checklist', data })
+      body: JSON.stringify(data)
     });
     if(!res.ok) throw new Error('save ' + res.status);
-    return data;
+    const json = await res.json();
+    if(json && json.error) throw new Error(json.error);
+    return normalize(json);
   }
 
   function updateAll(){

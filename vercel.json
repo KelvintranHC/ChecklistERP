@@ -1,0 +1,15 @@
+{
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    }
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "checklist-data": false
+    }
+  }
+}
