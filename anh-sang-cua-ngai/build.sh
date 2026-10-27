@@ -12,5 +12,5 @@ cd "$LIB"
 node core/render/events.mjs "$HERE"                                # DUR + EV -> events.json
 .venv/bin/python "$HERE/mix.py"                                    # foley, beds, true silence -> out/mix.wav
 node core/render/video.mjs "$HERE" --fps 24 --workers ${WORKERS:-2} --out "$HERE/out/video.mp4"
-sh core/render/mux.sh "$HERE/out/video.mp4" "$HERE/out/mix.wav" "$HERE/anh-sang-cua-ngai.mp4" 24 0   # no grain: keeps knife edges crisp
+sh "$HERE/tools/master.sh" "$HERE/out/video.mp4" "$HERE/out/mix.wav" "$HERE/anh-sang-cua-ngai.mp4"
 .venv/bin/python core/render/srt.py "$HERE/out/cues.json" "$HERE/anh-sang-cua-ngai.srt"

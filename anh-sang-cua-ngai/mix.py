@@ -1,4 +1,5 @@
 # Sound design + final mix: room hiss and drips, wind, palette-knife scrapes, cloth, the touch, birds at dawn; score on top.
+# (the file runs 3.3 s past the picture: mux cuts it at the last frame; mux's decode check needs the tail)
 # Run from the library root: $LIB/.venv/bin/python <project>/mix.py   (needs events.json from events.mjs)
 import sys, os, json
 sys.path.insert(0, os.environ.get('LIB', os.getcwd()))
@@ -7,7 +8,7 @@ from core.audio.sfx import SR, t_, env_exp, bp, lp, hp, noise, brown, norm, thum
 HERE = os.path.dirname(os.path.abspath(__file__))
 rng = np.random.default_rng(5)
 EVJ = json.load(open(os.path.join(HERE, 'events.json')))
-DUR = EVJ['dur'] + .3; N = int(DUR * SR)
+DUR = EVJ['dur'] + 3.3; N = int(DUR * SR)
 ev = {}
 for e in EVJ['ev']: ev.setdefault(e['type'], []).append(e['t'])
 music, _ = sf.read(os.path.join(HERE, 'music/score.wav')); music = music[:N]
