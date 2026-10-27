@@ -1,0 +1,19 @@
+Ánh Sáng Của Ngài — credits for third-party material
+
+Picture
+- Storyboard panels (plates/door.png, cross.png, face.png, hands.png, bless.png, dawn.png): supplied by the user
+  (attached storyboard image); repainted in code as palette-knife strokes. The user is responsible for their rights.
+- Impasto palette-knife engine (engine/impasto.js, engine/plate.js): from the Lemo-Opuscar library
+  (github.com/lemomo-ai/lemo-opuscar), MIT licence; adapted here (plate baking for software-GL rendering).
+
+Type
+- Cormorant Garamond — Copyright 2015 the Cormorant Project Authors, SIL Open Font License 1.1 (fonts/OFL.txt),
+  via Google Fonts.
+
+Sound
+- Samples (CC0): VS Chamber Orchestra: Community Edition (Versilian Studios); Versilian Community Sample Library
+  (Versilian Studios). Instruments: cellos, contrabass, violas, violins, horn, timpani, suspended cymbal, harp, glockenspiel.
+- Foley and ambience: synthesised in code (no recordings).
+
+Text
+- “Hãy đến cùng Ta.” — paraphrase of Matthew 11:28 (Ma-thi-ơ 11:28).

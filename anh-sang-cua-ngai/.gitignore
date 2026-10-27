@@ -1,0 +1,7 @@
+out/
+stills/
+plates/*_ref.png
+plates/*_id.png
+plates/meta.json
+events.json
+music/score.wav
