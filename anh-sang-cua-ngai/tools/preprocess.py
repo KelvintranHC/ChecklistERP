@@ -68,35 +68,40 @@ def fill_hole(a, m):
             known = known | upd
     return a
 
-meta = {}
-for n, zones in ZONES.items():
-    src = Image.open(f'{D}/plates/{n}.png').convert('RGB')
-    sw, sh = src.size; RW = round(RH * sw / sh); s = RH / sh
-    big = src.resize((RW, RH), Image.LANCZOS).filter(ImageFilter.UnsharpMask(2, 60, 2))
-    g = groups(big, K)
-    z = np.zeros((RH, RW), np.uint8)
-    yy, xx = np.mgrid[0:RH, 0:RW]
-    for i, (cx, cy, rx, ry) in enumerate(zones):
-        z[((xx - cx * s) / (rx * s)) ** 2 + ((yy - cy * s) / (ry * s)) ** 2 < 1] = 1
-    arr = np.asarray(big)
-    if n == 'hands':
-        im = Image.new('L', (RW, RH), 0); ImageDraw.Draw(im).polygon([(x * s, y * s) for x, y in ARM], fill=255)
-        arm = np.asarray(im.filter(ImageFilter.MaxFilter(3))) > 127
-        rgba = np.dstack([arr, (arm * 255).astype(np.uint8)])
-        Image.fromarray(rgba, 'RGBA').save(f'{D}/plates/hands_arm_ref.png')
-        ga = groups(big, 3); ida = np.dstack([(ga + 1) * arm, z * arm, np.zeros_like(z), arm * 255]).astype(np.uint8)
-        Image.fromarray(ida, 'RGBA').save(f'{D}/plates/hands_arm_id.png')
-        hole = ndimage.binary_dilation(arm, iterations=8)
-        f = fill_hole(arr, hole)
-        # give the filled area tile-sized value breaks, so the knife has planes to follow
-        blk = np.asarray(Image.fromarray((np.random.default_rng(4).random((RH // 14 + 1, RW // 14 + 1)) * 255).astype(np.uint8)).resize((RW, RH), Image.NEAREST)).astype(float)
-        blk = ndimage.gaussian_filter(blk, 1.2)[:RH, :RW]
-        f[hole] *= (1 + (blk[hole][:, None] / 255 - .5) * .16)
-        arr = f.clip(0, 255).astype(np.uint8)
-        g = groups(Image.fromarray(arr), K)
-    Image.fromarray(arr).save(f'{D}/plates/{n}_ref.png')
-    ida = np.dstack([g + 1, z, np.zeros_like(z), np.full_like(z, 255)]).astype(np.uint8)
-    Image.fromarray(ida, 'RGBA').save(f'{D}/plates/{n}_id.png')
-    meta[n] = {'w': RW, 'h': RH, 'src': [sw, sh]}
-    print(n, RW, RH, np.bincount(g.ravel(), minlength=K))
-json.dump(meta, open(f'{D}/plates/meta.json', 'w'))
+def main():
+    meta = {}
+    for n, zones in ZONES.items():
+        src = Image.open(f'{D}/plates/{n}.png').convert('RGB')
+        sw, sh = src.size; RW = round(RH * sw / sh); s = RH / sh
+        big = src.resize((RW, RH), Image.LANCZOS).filter(ImageFilter.UnsharpMask(2, 60, 2))
+        g = groups(big, K)
+        z = np.zeros((RH, RW), np.uint8)
+        yy, xx = np.mgrid[0:RH, 0:RW]
+        for i, (cx, cy, rx, ry) in enumerate(zones):
+            z[((xx - cx * s) / (rx * s)) ** 2 + ((yy - cy * s) / (ry * s)) ** 2 < 1] = 1
+        arr = np.asarray(big)
+        if n == 'hands':
+            im = Image.new('L', (RW, RH), 0); ImageDraw.Draw(im).polygon([(x * s, y * s) for x, y in ARM], fill=255)
+            arm = np.asarray(im.filter(ImageFilter.MaxFilter(3))) > 127
+            rgba = np.dstack([arr, (arm * 255).astype(np.uint8)])
+            Image.fromarray(rgba, 'RGBA').save(f'{D}/plates/hands_arm_ref.png')
+            ga = groups(big, 3); ida = np.dstack([(ga + 1) * arm, z * arm, np.zeros_like(z), arm * 255]).astype(np.uint8)
+            Image.fromarray(ida, 'RGBA').save(f'{D}/plates/hands_arm_id.png')
+            hole = ndimage.binary_dilation(arm, iterations=8)
+            f = fill_hole(arr, hole)
+            # give the filled area tile-sized value breaks, so the knife has planes to follow
+            blk = np.asarray(Image.fromarray((np.random.default_rng(4).random((RH // 14 + 1, RW // 14 + 1)) * 255).astype(np.uint8)).resize((RW, RH), Image.NEAREST)).astype(float)
+            blk = ndimage.gaussian_filter(blk, 1.2)[:RH, :RW]
+            f[hole] *= (1 + (blk[hole][:, None] / 255 - .5) * .16)
+            arr = f.clip(0, 255).astype(np.uint8)
+            g = groups(Image.fromarray(arr), K)
+        Image.fromarray(arr).save(f'{D}/plates/{n}_ref.png')
+        ida = np.dstack([g + 1, z, np.zeros_like(z), np.full_like(z, 255)]).astype(np.uint8)
+        Image.fromarray(ida, 'RGBA').save(f'{D}/plates/{n}_id.png')
+        meta[n] = {'w': RW, 'h': RH, 'src': [sw, sh]}
+        print(n, RW, RH, np.bincount(g.ravel(), minlength=K))
+    json.dump(meta, open(f'{D}/plates/meta.json', 'w'))
+
+
+if __name__ == "__main__":
+    main()
